@@ -1,16 +1,9 @@
-#include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <sys/wait.h>
 
-#ifdef TEST_SH
-# define TEST		1
-#else
-# define TEST		0
-#endif
-
-typedef struct 		s_inp
+typedef struct s_inp
 {
 	char			**args;
 	int				start;
@@ -30,6 +23,7 @@ int	ft_strlen(char *str) //1//
 		i++;
 	return (i);
 }
+
 
 int	ft_arrlen(char **arr) //2//
 {
@@ -54,10 +48,12 @@ void	ft_error(char *s1, char *s2) //3//
 
 char	**ft_add_str_to_arr(char **arr, char *str) //4//
 {
-	int		len = ft_arrlen(arr);
 	int		i = -1;
 	char	**new_arr;
+	int		len = ft_arrlen(arr);
 
+	if (!str)
+		return (arr);
 	new_arr = (char **)malloc(sizeof(char *) * (len + 2));
 	if (!new_arr)
 		ft_error("error: fatal", NULL);
@@ -146,9 +142,9 @@ t_inp	*ft_newnode(void) //8//
 	return (node);
 }
 
-t_inp	*ft_lastnode(t_inp *head) //9//
+t_inp	*ft_lastnode(t_inp *inp) //9//
 {
-	t_inp *tmp = head;
+	t_inp	*tmp = inp;
 
 	while (tmp)
 	{
@@ -175,18 +171,18 @@ void	ft_addnode(t_inp **head, t_inp *new) //10//
 
 t_inp	*ft_create_list(int node_cnt) //11//
 {
-	t_inp	*head = NULL;
+	t_inp	*inp = NULL;
 	t_inp	*node;
 
 	while (node_cnt--)
 	{
 		node = ft_newnode();
-		ft_addnode(&head, node);
+		ft_addnode(&inp, node);
 	}
-	return (head);
+	return (inp);
 }
 
-void	ft_fill_list(t_inp *inp, char **av) //12//
+void	ft_fill_list(t_inp	*inp, char **av) //12//
 {
 	t_inp	*tmp = inp;
 	int		i = 1;
@@ -195,15 +191,15 @@ void	ft_fill_list(t_inp *inp, char **av) //12//
 	{
 		if (!strcmp(av[i], ";") || !strcmp(av[i], "|"))
 		{
-			tmp->args = ft_add_str_to_arr(tmp->args, av[i]);
+			tmp->args =ft_add_str_to_arr(tmp->args, av[i]);
 			i++;
 		}
 		else
 		{
 			while (av[i] && strcmp(av[i], ";") && strcmp(av[i], "|"))
 			{
-				tmp->args = ft_add_str_to_arr(tmp->args, av[i]);
-				i++;
+				tmp->args =ft_add_str_to_arr(tmp->args, av[i]);
+				i++;	
 			}
 		}
 		tmp = tmp->next;
@@ -213,7 +209,7 @@ void	ft_fill_list(t_inp *inp, char **av) //12//
 void	ft_set_flags(t_inp *inp) //13//
 {
 	t_inp	*tmp = inp;
-
+	
 	while (tmp)
 	{
 		if ((!tmp->prev || !strcmp(tmp->prev->args[0], ";")) && (tmp->next && !strcmp(tmp->next->args[0], "|")))
@@ -228,7 +224,7 @@ void	ft_set_indexes(t_inp *inp) //14//
 {
 	t_inp	*tmp = inp;
 	int		i = 0;
-
+	
 	while (tmp)
 	{
 		if (tmp->start == 1 || tmp->end == 1)
@@ -241,8 +237,8 @@ void	ft_set_indexes(t_inp *inp) //14//
 			tmp->index = i;
 			i++;
 		}
-		tmp = tmp->next;
-	}	
+		tmp =tmp->next;
+	}
 }
 
 int	*ft_create_pipes(int pipe_cnt) //15//
@@ -256,7 +252,7 @@ int	*ft_create_pipes(int pipe_cnt) //15//
 	if (!fds)
 		ft_error("error: fatal", NULL);
 	while (++i < pipe_cnt)
-		if (pipe(&fds[2 * i]) == -1)
+		if (pipe(&fds[2 * 1]) == -1)
 			ft_error("error: fatal", NULL);
 	return (fds);
 }
@@ -273,10 +269,17 @@ void	ft_close_pipes(int *fds, int pipe_cnt) //16//
 		free(fds);
 }
 
-void	ft_create_proc(t_inp *node, int *fds, int pipe_cnt) //17//
+void	ft_wait_for_children(int proc_cnt) //17//
+{
+	int	i = -1;
+
+	while (++i < proc_cnt)
+		waitpid(0, NULL, 0);
+}
+
+void	ft_create_proc(t_inp *node, int *fds, int pipe_cnt, int proc_cnt, char **env) //18//
 {
 	pid_t	pid = fork();
-
 	if (pid == -1)
 		ft_error("error: fatal", NULL);
 	if (pid == 0)
@@ -294,14 +297,16 @@ void	ft_create_proc(t_inp *node, int *fds, int pipe_cnt) //17//
 			}
 		}
 		ft_close_pipes(fds, pipe_cnt);
-		if (execve(node->args[0], node->args, NULL) == -1)
+		if (execve(node->args[0], node->args, env) == -1)\
 			ft_error("error: cannot execute ", node->args[0]);
 	}
 	else if (node->index < 0)
 		waitpid(pid, NULL, 0);
+	else if (node->end == 1)
+		ft_wait_for_children(proc_cnt);
 }
 
-void	ft_call_proc(t_inp *inp, int *fds, int pipe_cnt) //18//
+void	ft_call_proc(t_inp *inp, int *fds, int pipe_cnt, int proc_cnt, char **env) //19//
 {
 	t_inp	*tmp = inp;
 
@@ -316,24 +321,16 @@ void	ft_call_proc(t_inp *inp, int *fds, int pipe_cnt) //18//
 		{
 			if (ft_arrlen(tmp->args) != 2)
 				ft_error("error: cd: bad arguments", NULL);
-			else if (chdir(tmp->args[1]) == -1)
+			if (chdir(tmp->args[1]) == -1)
 				ft_error("error: cd: cannot change directory to ", tmp->args[1]);
 		}
 		else
-			ft_create_proc(tmp, fds, pipe_cnt);
+			ft_create_proc(tmp, fds, pipe_cnt, proc_cnt, env);
 		tmp = tmp->next;
 	}
 }
 
-void	ft_wait_for_children(int proc_cnt) //19//
-{
-	int	i = -1;
-
-	while (++i < proc_cnt)
-		waitpid(0, NULL, 0);
-}
-
-int	main(int ac, char **av) //20//
+int	main(int ac, char **av, char **env) //20//
 {
 	int		node_cnt = ft_node_cnt(av);
 	int		pipe_cnt = ft_pipe_cnt(av);
@@ -348,11 +345,7 @@ int	main(int ac, char **av) //20//
 	ft_set_flags(inp);
 	ft_set_indexes(inp);
 	fds = ft_create_pipes(pipe_cnt);
-	ft_call_proc(inp, fds, pipe_cnt);
+	ft_call_proc(inp, fds, pipe_cnt, proc_cnt, env);
 	ft_close_pipes(fds, pipe_cnt);
-	ft_wait_for_children(proc_cnt);
-	if (TEST)
-		while (1);
 	return (0);
 }
-
