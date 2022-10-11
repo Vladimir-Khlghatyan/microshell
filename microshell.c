@@ -1,9 +1,11 @@
+
+#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/wait.h>
 
-typedef struct s_inp
+typedef struct	s_inp
 {
 	char			**args;
 	int				start;
@@ -11,7 +13,7 @@ typedef struct s_inp
 	int				index;
 	struct s_inp	*prev;
 	struct s_inp	*next;
-}					t_inp;
+}				t_inp;
 
 int	ft_strlen(char *str) //1//
 {
@@ -23,7 +25,6 @@ int	ft_strlen(char *str) //1//
 		i++;
 	return (i);
 }
-
 
 int	ft_arrlen(char **arr) //2//
 {
@@ -57,7 +58,7 @@ char	**ft_add_str_to_arr(char **arr, char *str) //4//
 	new_arr = (char **)malloc(sizeof(char *) * (len + 2));
 	if (!new_arr)
 		ft_error("error: fatal", NULL);
-	while (++i < len)
+	while (arr[++i])
 		new_arr[i] = arr[i];
 	new_arr[i] = str;
 	new_arr[i + 1] = NULL;
@@ -65,65 +66,7 @@ char	**ft_add_str_to_arr(char **arr, char *str) //4//
 	return (new_arr);
 }
 
-int	ft_node_cnt(char **av) //5//
-{
-	int	cnt = 0;
-	int	i = 1;
-
-	if (ft_arrlen(av) < 2)
-		return (0);
-	while (av[i])
-	{
-		if (!strcmp(av[i], ";") || !strcmp(av[i], "|"))
-		{
-			cnt++;
-			i++;
-		}
-		else
-		{
-			while (av[i] && strcmp(av[i], ";") && strcmp(av[i], "|"))
-				i++;
-			cnt++;
-		}
-	}
-	return (cnt);
-}
-
-int	ft_pipe_cnt(char **av) //6//
-{
-	int	cnt = 0;
-	int	i = 0;
-
-	if (ft_arrlen(av) < 2)
-		return (0);
-	while (av[++i])
-		if (!strcmp(av[i], "|"))
-			cnt++;
-	return (cnt);
-}
-
-int	ft_proc_cnt(char **av) //7//
-{
-	int	cnt = 0;
-	int	i = 1;
-
-	if (ft_arrlen(av) < 2)
-		return (0);
-	while (av[i])
-	{
-		if (!strcmp(av[i], ";") || !strcmp(av[i], "|"))
-			i++;
-		else
-		{
-			while (av[i] && strcmp(av[i], ";") && strcmp(av[i], "|"))
-				i++;
-			cnt++;
-		}
-	}
-	return (cnt);
-}
-
-t_inp	*ft_newnode(void) //8//
+t_inp	*ft_newnode(void) //5//
 {
 	t_inp	*node;
 
@@ -131,7 +74,7 @@ t_inp	*ft_newnode(void) //8//
 	if (!node)
 		ft_error("error: fatal", NULL);
 	node->args = (char **)malloc(sizeof(char *));
-	if (!(node->args))
+	if (!node->args)
 		ft_error("error: fatal", NULL);
 	node->args[0] = NULL;
 	node->start = -1;
@@ -142,144 +85,126 @@ t_inp	*ft_newnode(void) //8//
 	return (node);
 }
 
-t_inp	*ft_lastnode(t_inp *inp) //9//
+void	ft_addnode(t_inp **head, t_inp *new) //6//
 {
-	t_inp	*tmp = inp;
+	t_inp	*last_node = *head;
 
-	while (tmp)
-	{
-		if (!(tmp->next))
-			return (tmp);
-		tmp = tmp->next;
-	}
-	return (NULL);
-}
-
-void	ft_addnode(t_inp **head, t_inp *new) //10//
-{
-	t_inp	*last_node;
-
-	if (!(*head))
-	{
+	if (!*head)
 		*head = new;
-		return ;
+	else
+	{
+		while (last_node->next)
+			last_node = last_node->next;
+		last_node->next = new;
+		new->prev = last_node;
 	}
-	last_node = ft_lastnode(*head);
-	last_node->next = new;
-	new->prev = last_node;
 }
 
-t_inp	*ft_create_list(int node_cnt) //11//
+t_inp	*ft_create_list(char **av) //7//
 {
 	t_inp	*inp = NULL;
 	t_inp	*node;
-
-	while (node_cnt--)
-	{
-		node = ft_newnode();
-		ft_addnode(&inp, node);
-	}
-	return (inp);
-}
-
-void	ft_fill_list(t_inp	*inp, char **av) //12//
-{
-	t_inp	*tmp = inp;
 	int		i = 1;
 
 	while (av[i])
 	{
+		node = ft_newnode();
 		if (!strcmp(av[i], ";") || !strcmp(av[i], "|"))
 		{
-			tmp->args =ft_add_str_to_arr(tmp->args, av[i]);
+			node->args = ft_add_str_to_arr(node->args, av[i]);
 			i++;
 		}
 		else
 		{
 			while (av[i] && strcmp(av[i], ";") && strcmp(av[i], "|"))
 			{
-				tmp->args =ft_add_str_to_arr(tmp->args, av[i]);
-				i++;	
+				node->args = ft_add_str_to_arr(node->args, av[i]);
+				i++;
 			}
 		}
-		tmp = tmp->next;
+		ft_addnode(&inp, node);
 	}
+	return (inp);
 }
 
-void	ft_set_flags(t_inp *inp) //13//
-{
-	t_inp	*tmp = inp;
-	
-	while (tmp)
-	{
-		if ((!tmp->prev || !strcmp(tmp->prev->args[0], ";")) && (tmp->next && !strcmp(tmp->next->args[0], "|")))
-			tmp->start = 1;
-		if ((tmp->prev && !strcmp(tmp->prev->args[0], "|")) && (!tmp->next || !strcmp(tmp->next->args[0], ";")))
-			tmp->end = 1;
-		tmp = tmp->next;
-	}
-}
-
-void	ft_set_indexes(t_inp *inp) //14//
+void	ft_set_flags(t_inp *inp) //8//
 {
 	t_inp	*tmp = inp;
 	int		i = 0;
-	
+
 	while (tmp)
 	{
-		if (tmp->start == 1 || tmp->end == 1)
+		if ((!tmp->prev || !strcmp(tmp->prev->args[0], ";")) && (tmp->next && !strcmp(tmp->next->args[0], "|")))
 		{
-			tmp->index = i;
-			i++;
+			tmp->start = 1;
+			tmp->index = i++;
 		}
-		else if (tmp->prev && tmp->next && !strcmp(tmp->prev->args[0], "|") && !strcmp(tmp->next->args[0], "|"))
+		if ((tmp->prev && !strcmp(tmp->prev->args[0], "|")) && (!tmp->next || !strcmp(tmp->next->args[0], ";")))
 		{
+			tmp->end = 1;
 			tmp->index = i;
-			i++;
+			i = 0;
 		}
-		tmp =tmp->next;
+		if (tmp->prev && tmp->next && !strcmp(tmp->prev->args[0], "|") && !strcmp(tmp->next->args[0], "|"))
+			tmp->index = i++;
+		tmp = tmp->next;
 	}
 }
 
-int	*ft_create_pipes(int pipe_cnt) //15//
+int	*ft_create_pipes(t_inp *node) //9//
 {
-	int	*fds = NULL;
-	int	i = -1;
+	int		*fds = NULL;
+	int		pipe_cnt = 0;
+	int		i = -1;
+	t_inp	*tmp = node;
 
-	if (pipe_cnt < 1)
+	if (node->start != 1)
 		return (NULL);
-	fds = (int *)malloc(sizeof(int) * (pipe_cnt * 2));
+	while (tmp->end != 1)
+	{
+		pipe_cnt++;
+		tmp = tmp->next;
+	}
+	fds = (int *)malloc(sizeof(int) * (pipe_cnt * 2 + 1));
 	if (!fds)
 		ft_error("error: fatal", NULL);
 	while (++i < pipe_cnt)
-		if (pipe(&fds[2 * 1]) == -1)
+		if (pipe(&fds[2 * i]) == -1)
 			ft_error("error: fatal", NULL);
+	fds[2 * i] = -1;
 	return (fds);
 }
 
-void	ft_close_pipes(int *fds, int pipe_cnt) //16//
+void	ft_close_pipes(int *fds) //10//
 {
 	int	i = -1;
 
-	if (pipe_cnt < 1)
+	if (!fds)
 		return ;
-	while (++i < (pipe_cnt * 2))
-		close(fds[i]);
-	if (fds)
-		free(fds);
+	while (fds[++i] != -1)
+		if (close(fds[i]) == -1)
+			ft_error("error: fatal", NULL);
+	free(fds);
 }
 
-void	ft_wait_for_children(int proc_cnt) //17//
+void	ft_wait_for_children(t_inp *node) //11//
 {
-	int	i = -1;
+	t_inp	*tmp = node;
 
-	while (++i < proc_cnt)
+	if (node->end != 1)
+		return ;
+	while (tmp->start != 1)
+	{
 		waitpid(0, NULL, 0);
+		tmp = tmp->prev;
+	}
+	waitpid(0, NULL, 0);
 }
 
-void	ft_create_proc(t_inp *node, int *fds, int pipe_cnt, int proc_cnt, char **env) //18//
+void	ft_create_proc(t_inp *node, int *fds) //12//
 {
 	pid_t	pid = fork();
+
 	if (pid == -1)
 		ft_error("error: fatal", NULL);
 	if (pid == 0)
@@ -287,65 +212,87 @@ void	ft_create_proc(t_inp *node, int *fds, int pipe_cnt, int proc_cnt, char **en
 		if (node->index >= 0)
 		{
 			if (node->start == 1)
-				dup2(fds[2 * node->index + 1], 1);
+			{
+				if (dup2(fds[2 * node->index + 1], 1) == -1)
+					ft_error("error: fatal", NULL);
+			}
 			else if (node->end == 1)
-				dup2(fds[2 * node->index - 2], 0);
+			{
+				if (dup2(fds[2 * node->index - 2], 0) == -1)
+					ft_error("error: fatal", NULL);
+			}
 			else
 			{
-				dup2(fds[2 * node->index + 1], 1);
-				dup2(fds[2 * node->index - 2], 0);
+				if (dup2(fds[2 * node->index + 1], 1) == -1)
+					ft_error("error: fatal", NULL);
+				if (dup2(fds[2 * node->index - 2], 0) == -1)
+					ft_error("error: fatal", NULL);
 			}
 		}
-		ft_close_pipes(fds, pipe_cnt);
-		if (execve(node->args[0], node->args, env) == -1)\
+		ft_close_pipes(fds);
+		if (execve(node->args[0], node->args, NULL) == -1)
 			ft_error("error: cannot execute ", node->args[0]);
 	}
 	else if (node->index < 0)
 		waitpid(pid, NULL, 0);
 	else if (node->end == 1)
-		ft_wait_for_children(proc_cnt);
+	{
+		ft_close_pipes(fds);
+		ft_wait_for_children(node);
+	}
 }
 
-void	ft_call_proc(t_inp *inp, int *fds, int pipe_cnt, int proc_cnt, char **env) //19//
+void	ft_call_proc(t_inp *inp) //13//
 {
 	t_inp	*tmp = inp;
+	int		*fds = NULL;
 
 	while (tmp)
 	{
 		if (!strcmp(tmp->args[0], ";") || !strcmp(tmp->args[0], "|"))
-		{
 			tmp = tmp->next;
-			continue ;
-		}
-		if (!strcmp(tmp->args[0], "cd"))
+		else if (!strcmp(tmp->args[0], "cd"))
 		{
 			if (ft_arrlen(tmp->args) != 2)
 				ft_error("error: cd: bad arguments", NULL);
 			if (chdir(tmp->args[1]) == -1)
 				ft_error("error: cd: cannot change directory to ", tmp->args[1]);
+			tmp = tmp->next;
 		}
 		else
-			ft_create_proc(tmp, fds, pipe_cnt, proc_cnt, env);
-		tmp = tmp->next;
+		{
+			if (tmp->start == 1)
+				fds = ft_create_pipes(tmp);
+			ft_create_proc(tmp, fds);
+			if (tmp->end == 1)
+				fds = NULL;
+			tmp = tmp->next;
+		}
 	}
 }
 
-int	main(int ac, char **av, char **env) //20//
+void	ft_free_list(t_inp *inp)
 {
-	int		node_cnt = ft_node_cnt(av);
-	int		pipe_cnt = ft_pipe_cnt(av);
-	int		proc_cnt = ft_proc_cnt(av);
-	int		*fds = NULL;
+	t_inp	*tmp;
+
+	while (inp)
+	{
+		free(inp->args);
+		tmp = inp->next;
+		free(inp);
+		inp = tmp;
+	}
+}
+
+int	main(int ac, char **av) //14//
+{
 	t_inp	*inp = NULL;
 
 	if (ac < 2)
 		return (0);
-	inp = ft_create_list(node_cnt);
-	ft_fill_list(inp, av);
+	inp = ft_create_list(av);
 	ft_set_flags(inp);
-	ft_set_indexes(inp);
-	fds = ft_create_pipes(pipe_cnt);
-	ft_call_proc(inp, fds, pipe_cnt, proc_cnt, env);
-	ft_close_pipes(fds, pipe_cnt);
+	ft_call_proc(inp);
+	ft_free_list(inp);
 	return (0);
 }
