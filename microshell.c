@@ -1,11 +1,9 @@
-
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/wait.h>
 
-typedef struct	s_inp
+typedef struct		s_inp
 {
 	char			**args;
 	int				start;
@@ -13,7 +11,7 @@ typedef struct	s_inp
 	int				index;
 	struct s_inp	*prev;
 	struct s_inp	*next;
-}				t_inp;
+}					t_inp;
 
 int	ft_strlen(char *str) //1//
 {
@@ -37,27 +35,27 @@ int	ft_arrlen(char **arr) //2//
 	return (i);
 }
 
-void	ft_error(char *s1, char *s2) //3//
+void ft_error(char *s1, char *s2, int exit_flag) //3//
 {
 	if (s1)
 		write(2, s1, ft_strlen(s1));
 	if (s2)
 		write(2, s2, ft_strlen(s2));
 	write(2, "\n", 1);
-	exit(1);
+	if (exit_flag)
+		exit(1);
 }
 
 char	**ft_add_str_to_arr(char **arr, char *str) //4//
 {
 	int		i = -1;
 	char	**new_arr;
-	int		len = ft_arrlen(arr);
 
-	if (!str)
+	if (!arr || !str)
 		return (arr);
-	new_arr = (char **)malloc(sizeof(char *) * (len + 2));
+	new_arr = (char **)malloc(sizeof(char *) *(ft_arrlen(arr) + 2));
 	if (!new_arr)
-		ft_error("error: fatal", NULL);
+		ft_error("error: fatal", NULL, 1);
 	while (arr[++i])
 		new_arr[i] = arr[i];
 	new_arr[i] = str;
@@ -72,10 +70,10 @@ t_inp	*ft_newnode(void) //5//
 
 	node = (t_inp *)malloc(sizeof(t_inp));
 	if (!node)
-		ft_error("error: fatal", NULL);
+		ft_error("error: fatal", NULL, 1);
 	node->args = (char **)malloc(sizeof(char *));
 	if (!node->args)
-		ft_error("error: fatal", NULL);
+		ft_error("error: fatal", NULL, 1);
 	node->args[0] = NULL;
 	node->start = -1;
 	node->end = -1;
@@ -154,36 +152,36 @@ void	ft_set_flags(t_inp *inp) //8//
 int	*ft_create_pipes(t_inp *node) //9//
 {
 	int		*fds = NULL;
+	t_inp	*tmp = node;
 	int		pipe_cnt = 0;
 	int		i = -1;
-	t_inp	*tmp = node;
 
 	if (node->start != 1)
 		return (NULL);
 	while (tmp->end != 1)
 	{
 		pipe_cnt++;
-		tmp = tmp->next;
+		tmp = tmp->prev;
 	}
 	fds = (int *)malloc(sizeof(int) * (pipe_cnt * 2 + 1));
 	if (!fds)
-		ft_error("error: fatal", NULL);
+		ft_error("error: fatal", NULL, 1);
 	while (++i < pipe_cnt)
 		if (pipe(&fds[2 * i]) == -1)
-			ft_error("error: fatal", NULL);
+			ft_error("error: fatal", NULL, 1);
 	fds[2 * i] = -1;
 	return (fds);
 }
 
-void	ft_close_pipes(int *fds) //10//
+void	ft_close_pipes(int	*fds) //10//
 {
 	int	i = -1;
 
 	if (!fds)
 		return ;
-	while (fds[++i] != -1)
+	while (fds[++i])
 		if (close(fds[i]) == -1)
-			ft_error("error: fatal", NULL);
+			ft_error("error: fatal", NULL, 1);
 	free(fds);
 }
 
@@ -193,12 +191,11 @@ void	ft_wait_for_children(t_inp *node) //11//
 
 	if (node->end != 1)
 		return ;
-	while (tmp->start != 1)
+	while (tmp && tmp->index >= 0)
 	{
 		waitpid(0, NULL, 0);
 		tmp = tmp->prev;
 	}
-	waitpid(0, NULL, 0);
 }
 
 void	ft_create_proc(t_inp *node, int *fds) //12//
@@ -206,7 +203,7 @@ void	ft_create_proc(t_inp *node, int *fds) //12//
 	pid_t	pid = fork();
 
 	if (pid == -1)
-		ft_error("error: fatal", NULL);
+		ft_error("error: fatal", NULL, 1);
 	if (pid == 0)
 	{
 		if (node->index >= 0)
@@ -214,24 +211,24 @@ void	ft_create_proc(t_inp *node, int *fds) //12//
 			if (node->start == 1)
 			{
 				if (dup2(fds[2 * node->index + 1], 1) == -1)
-					ft_error("error: fatal", NULL);
+					ft_error("error: fatal", NULL, 1);
 			}
 			else if (node->end == 1)
 			{
 				if (dup2(fds[2 * node->index - 2], 0) == -1)
-					ft_error("error: fatal", NULL);
+					ft_error("error: fatal", NULL, 1);
 			}
 			else
 			{
-				if (dup2(fds[2 * node->index + 1], 1) == -1)
-					ft_error("error: fatal", NULL);
 				if (dup2(fds[2 * node->index - 2], 0) == -1)
-					ft_error("error: fatal", NULL);
+					ft_error("error: fatal", NULL, 1);
+				if (dup2(fds[2 * node->index + 1], 1) == -1)
+					ft_error("error: fatal", NULL, 1);
 			}
 		}
 		ft_close_pipes(fds);
 		if (execve(node->args[0], node->args, NULL) == -1)
-			ft_error("error: cannot execute ", node->args[0]);
+			ft_error("error: cannot execute ", node->args[0], 1);
 	}
 	else if (node->index < 0)
 		waitpid(pid, NULL, 0);
@@ -244,8 +241,8 @@ void	ft_create_proc(t_inp *node, int *fds) //12//
 
 void	ft_call_proc(t_inp *inp) //13//
 {
-	t_inp	*tmp = inp;
 	int		*fds = NULL;
+	t_inp	*tmp = inp;
 
 	while (tmp)
 	{
@@ -254,9 +251,9 @@ void	ft_call_proc(t_inp *inp) //13//
 		else if (!strcmp(tmp->args[0], "cd"))
 		{
 			if (ft_arrlen(tmp->args) != 2)
-				ft_error("error: cd: bad arguments", NULL);
+				ft_error("error: cd: bad arguments", NULL, 0);
 			if (chdir(tmp->args[1]) == -1)
-				ft_error("error: cd: cannot change directory to ", tmp->args[1]);
+				ft_error("error: cd: cannot change directory to ", tmp->args[1], 0);
 			tmp = tmp->next;
 		}
 		else
@@ -271,7 +268,7 @@ void	ft_call_proc(t_inp *inp) //13//
 	}
 }
 
-void	ft_free_list(t_inp *inp)
+void	ft_free_list(t_inp *inp) //14//
 {
 	t_inp	*tmp;
 
@@ -284,13 +281,11 @@ void	ft_free_list(t_inp *inp)
 	}
 }
 
-int	main(int ac, char **av) //14//
+int	main(int ac, char **av) //15//
 {
-	t_inp	*inp = NULL;
-
 	if (ac < 2)
 		return (0);
-	inp = ft_create_list(av);
+	t_inp	*inp = ft_create_list(av);
 	ft_set_flags(inp);
 	ft_call_proc(inp);
 	ft_free_list(inp);
