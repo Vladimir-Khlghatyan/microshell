@@ -252,7 +252,7 @@ void	ft_call_proc(t_inp *inp) //13//
 		{
 			if (ft_arrlen(tmp->args) != 2)
 				ft_error("error: cd: bad arguments", NULL, 0);
-			if (chdir(tmp->args[1]) == -1)
+			else if (chdir(tmp->args[1]) == -1)
 				ft_error("error: cd: cannot change directory to ", tmp->args[1], 0);
 			tmp = tmp->next;
 		}
